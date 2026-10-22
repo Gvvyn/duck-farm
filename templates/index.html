@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/9920/9920208.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Утиная ферма — магазин фермерского мяса</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="header">
+    <a href="#" class="logo" onclick="showPage('home'); return false;">
+        <span class="logo-icon">🦆</span>
+        <span>
+            <strong>Утиная ферма</strong>
+            <small>Натуральное. Свежее. Вкусное.</small>
+        </span>
+    </a>
+
+    <nav class="navigation">
+        <button class="nav-btn active" data-page="home"
+                onclick="showPage('home')">
+            Главная страница
+        </button>
+
+        <button class="nav-btn" data-page="history"
+                onclick="showPage('history')">
+            История фермы
+        </button>
+
+        <button class="nav-btn" data-page="catalog"
+                onclick="showPage('catalog')">
+            Каталог
+        </button>
+    </nav>
+</header>
+
+<main>
+    <!-- Главная страница -->
+    <section id="home" class="page active-page">
+        <div class="hero">
+            <div class="hero-content">
+                <span class="eyebrow">НАТУРАЛЬНЫЕ ФЕРМЕРСКИЕ ПРОДУКТЫ</span>
+                <h1>Утиное мясо<br>с нашей фермы</h1>
+                <p>
+                    Натуральное, свежее и качественное мясо
+                    с доставкой прямо к вашему столу.
+                </p>
+                <button class="primary-btn"
+                        onclick="showPage('catalog')">
+                    Перейти в каталог →
+                </button>
+            </div>
+        </div>
+
+        <section class="benefits">
+            <h2>Почему выбирают нас?</h2>
+            <p class="section-description">
+                Заботимся о качестве на каждом этапе —
+                от фермы до вашего стола.
+            </p>
+
+            <div class="benefit-grid">
+                <article class="benefit-card">
+                    <span class="benefit-icon">🌿</span>
+                    <h3>Натуральный продукт</h3>
+                    <p>Внимание к качеству и свежести каждого продукта.</p>
+                </article>
+
+                <article class="benefit-card">
+                    <span class="benefit-icon">🏡</span>
+                    <h3>Собственная ферма</h3>
+                    <p>Знаем, как выращивается наша продукция.</p>
+                </article>
+
+                <article class="benefit-card">
+                    <span class="benefit-icon">🚚</span>
+                    <h3>Удобная доставка</h3>
+                    <p>Доставляем заказы прямо к вашему столу.</p>
+                </article>
+
+                <article class="benefit-card">
+                    <span class="benefit-icon">✓</span>
+                    <h3>Контроль качества</h3>
+                    <p>Следим за качеством продукции перед продажей.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="promo">
+            <div>
+                <span class="eyebrow">ОТ ФЕРМЫ К ВАШЕМУ СТОЛУ</span>
+                <h2>Вкус настоящих фермерских продуктов</h2>
+                <p>
+                    Познакомьтесь с нашей продукцией и выберите
+                    подходящие продукты для своего стола.
+                </p>
+                <button class="primary-btn"
+                        onclick="showPage('catalog')">
+                    Смотреть каталог →
+                </button>
+            </div>
+            <div class="promo-image">🦆</div>
+        </section>
+    </section>
+
+    <!-- История фермы -->
+    <section id="history" class="page content-page">
+        <span class="eyebrow">НАША ИСТОРИЯ</span>
+        <h1>Ферма, в которой важна каждая деталь</h1>
+        <p class="section-description">
+            Мы создаём место, где забота о животных,
+            внимание к качеству и любовь к своему делу
+            становятся основой каждого продукта.
+        </p>
+
+        <div class="history-grid">
+            <article class="history-card">
+                <span>01</span>
+                <h2>Наше начало</h2>
+                <p>
+                    Всё начинается с идеи предложить покупателям
+                    качественное утиное мясо от фермерского хозяйства.
+                </p>
+            </article>
+
+            <article class="history-card">
+                <span>02</span>
+                <h2>Забота о качестве</h2>
+                <p>
+                    Мы стремимся контролировать процессы производства
+                    и уделять внимание свежести продукции.
+                </p>
+            </article>
+
+            <article class="history-card">
+                <span>03</span>
+                <h2>Ближе к покупателю</h2>
+                <p>
+                    Наш магазин помогает выбрать продукцию фермы
+                    и оформить заказ в несколько нажатий.
+                </p>
+            </article>
+        </div>
+
+        <p class="note">
+            Здесь можно добавить настоящую историю вашей фермы,
+            фотографии хозяйства и рассказ о выращивании уток.
+        </p>
+    </section>
+
+    <!-- Каталог -->
+    <section id="catalog" class="page content-page">
+        <span class="eyebrow">НАША ПРОДУКЦИЯ</span>
+        <h1>Каталог товаров</h1>
+        <p class="section-description">
+            Выбирайте утиное мясо для повседневных блюд
+            и особенных ужинов.
+        </p>
+
+        <div class="product-grid">
+            <article class="product-card">
+                <div class="product-image">
+    <img src="{{ url_for('static', filename='duck-breast.jpg') }}"
+         alt="Утиная грудка">
+                </div>
+                <div class="product-info">
+                    <span class="product-tag">ФЕРМЕРСКИЙ ПРОДУКТ</span>
+                    <h2>Утиная грудка</h2>
+                    <p>Нежное мясо для запекания и жарки.</p>
+                    <div class="product-bottom">
+                        <strong>Цена по запросу</strong>
+                        <button class="buy-btn"
+                                onclick="alert('Свяжитесь с продавцом для оформления заказа.')">
+                            Заказать
+                        </button>
+                    </div>
+                </div>
+            </article>
+
+            <article class="product-card">
+                <div class="product-image">
+    <img src="{{ url_for('static', filename='duck-legs.jpg') }}"
+         alt="Утиные ножки">
+                </div>
+                <div class="product-info">
+                    <span class="product-tag">ФЕРМЕРСКИЙ ПРОДУКТ</span>
+                    <h2>Утиные ножки</h2>
+                    <p>Отлично подходят для запекания в духовке.</p>
+                    <div class="product-bottom">
+                        <strong>Цена по запросу</strong>
+                        <button class="buy-btn"
+                                onclick="alert('Свяжитесь с продавцом для оформления заказа.')">
+                            Заказать
+                        </button>
+                    </div>
+                </div>
+            </article>
+
+            <article class="product-card">
+                <div class="product-image">
+    <img src="{{ url_for('static', filename='whole-duck.jpg') }}"
+         alt="Целая утка">
+                </div>
+                <div class="product-info">
+                    <span class="product-tag">ФЕРМЕРСКИЙ ПРОДУКТ</span>
+                    <h2>Целая утка</h2>
+                    <p>Для праздничного стола и семейного ужина.</p>
+                    <div class="product-bottom">
+                        <strong>Цена по запросу</strong>
+                        <button class="buy-btn"
+                                onclick="alert('Свяжитесь с продавцом для оформления заказа.')">
+                            Заказать
+                        </button>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </section>
+</main>
+
+<footer class="footer">
+    <p>© 2026 Утиная ферма</p>
+    <p>Натуральные продукты с заботой о качестве</p>
+</footer>
+
+<script>
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(page => {
+            page.classList.remove('active-page');
+        });
+
+        document.getElementById(pageId).classList.add('active-page');
+
+        document.querySelectorAll('.nav-btn').forEach(button => {
+            button.classList.toggle(
+                'active',
+                button.dataset.page === pageId
+            );
+        });
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+</script>
+
+</body>
+</html>
