@@ -1,172 +1,272 @@
-
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
+import sqlite3
+from pathlib import Path
+from uuid import uuid4
 
 app = Flask(__name__)
+BASE_DIR = Path(__file__).resolve().parent
+DATABASE = BASE_DIR / "duck_farm.db"
 
-# Пример каталога товаров
-products = [
-    {
-        "id": 1,
-        "name": "Утиная грудка",
-        "price": 1200,
-        "description": "Филе утки"
-    },
-    {
-        "id": 2,
-        "name": "Утиные ножки",
-        "price": 900,
-        "description": "Ножки утки"
-    },
-    {
-        "id": 3,
-        "name": "Целая утка",
-        "price": 2500,
-        "description": "Целая тушка утки"
-    }
+INITIAL_PRODUCTS = [
+    (1, "Утиная грудка", 12.00, "Нежное мясо для запекания и жарки.", "duck-breast.jpg"),
+    (2, "Утиные ножки", 9.00, "Отлично подходят для запекания в духовке.", "duck-legs.jpg"),
+    (3, "Целая утка", 25.00, "Для праздничного стола и семейного ужина.", "whole-duck.jpg"),
 ]
 
-farm = {
+FARM = {
     "name": "Duck Farm",
     "description": "Ферма по выращиванию уток"
 }
 
 
-# Главная страница API
+def get_db():
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
+def init_db():
+    with get_db() as db:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL NOT NULL CHECK(price >= 0),
+                description TEXT NOT NULL DEFAULT '',
+                image TEXT NOT NULL DEFAULT ''
+            )
+        """)
+        # Migration for a database created by an earlier version of this project.
+        product_columns = {
+            row["name"] for row in db.execute("PRAGMA table_info(products)").fetchall()
+        }
+        if "image" not in product_columns:
+            db.execute("ALTER TABLE products ADD COLUMN image TEXT NOT NULL DEFAULT ''")
+
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS cart_items (
+                cart_id TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL CHECK(quantity > 0),
+                PRIMARY KEY (cart_id, product_id),
+                FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+        """)
+        count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        if count == 0:
+            db.executemany(
+                "INSERT INTO products (id, name, price, description, image) VALUES (?, ?, ?, ?, ?)",
+                INITIAL_PRODUCTS
+            )
+
+
+def product_to_dict(row):
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "price": round(float(row["price"]), 2),
+        "currency": "USD",
+        "description": row["description"],
+        "image": row["image"]
+    }
+
+
+def get_cart_id():
+    cart_id = request.headers.get("X-Cart-ID", "").strip()
+    if not cart_id or len(cart_id) > 80:
+        return None
+    return cart_id
+
+
+def get_cart_payload(db, cart_id):
+    rows = db.execute("""
+        SELECT p.id, p.name, p.price, p.description, p.image, ci.quantity
+        FROM cart_items ci
+        JOIN products p ON p.id = ci.product_id
+        WHERE ci.cart_id = ?
+        ORDER BY p.id
+    """, (cart_id,)).fetchall()
+
+    items = []
+    total_items = 0
+    total_price_cents = 0
+    for row in rows:
+        price_cents = round(float(row["price"]) * 100)
+        subtotal_cents = price_cents * row["quantity"]
+        total_items += row["quantity"]
+        total_price_cents += subtotal_cents
+        items.append({
+            **product_to_dict(row),
+            "quantity": row["quantity"],
+            "subtotal": round(subtotal_cents / 100, 2)
+        })
+
+    return {
+        "cart_id": cart_id,
+        "items": items,
+        "total_items": total_items,
+        "total_price": round(total_price_cents / 100, 2),
+        "currency": "USD"
+    }
+
+
 @app.route("/")
 def home():
+    return render_template("index.html")
+
+
+@app.get("/api")
+def api_info():
     return jsonify({
-        "message": "Duck Farm API",
-        "endpoints": [
-            "GET /api/products",
-            "GET /api/products/<id>",
-            "POST /api/products",
-            "PUT /api/products/<id>",
-            "DELETE /api/products/<id>",
-            "GET /api/farm"
-        ]
+        "name": "Duck Farm REST API",
+        "currency": "USD",
+        "endpoints": {
+            "GET /api/products": "Get all products",
+            "GET /api/products/<id>": "Get one product",
+            "GET /api/farm": "Get farm information",
+            "GET /api/cart": "Get cart (send X-Cart-ID header)",
+            "POST /api/cart/items": "Add product to cart",
+            "PATCH /api/cart/items/<product_id>": "Set cart item quantity",
+            "DELETE /api/cart/items/<product_id>": "Remove item from cart",
+            "DELETE /api/cart": "Clear cart"
+        }
     })
 
 
-# Получение всех товаров
-@app.route("/api/products", methods=["GET"])
+@app.get("/api/products")
 def get_products():
-    return jsonify(products), 200
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM products ORDER BY id").fetchall()
+    return jsonify([product_to_dict(row) for row in rows]), 200
 
 
-# Получение одного товара
-@app.route("/api/products/<int:product_id>", methods=["GET"])
+@app.get("/api/products/<int:product_id>")
 def get_product(product_id):
-    product = next(
-        (p for p in products if p["id"] == product_id),
-        None
-    )
-
-    if product is None:
+    with get_db() as db:
+        row = db.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+    if row is None:
         return jsonify({"error": "Товар не найден"}), 404
-
-    return jsonify(product), 200
-
-
-# Добавление товара
-@app.route("/api/products", methods=["POST"])
-def create_product():
-    data = request.get_json(silent=True)
-
-    if not isinstance(data, dict):
-        return jsonify({"error": "Ожидается JSON-объект"}), 400
-
-    name = data.get("name")
-    price = data.get("price")
-    description = data.get("description", "")
-
-    if not isinstance(name, str) or not name.strip():
-        return jsonify({"error": "Укажите название товара"}), 400
-
-    if (
-        isinstance(price, bool)
-        or not isinstance(price, (int, float))
-        or price < 0
-    ):
-        return jsonify({"error": "Некорректная цена"}), 400
-
-    new_id = max((p["id"] for p in products), default=0) + 1
-
-    product = {
-        "id": new_id,
-        "name": name.strip(),
-        "price": price,
-        "description": description
-    }
-
-    products.append(product)
-
-    return jsonify(product), 201
+    return jsonify(product_to_dict(row)), 200
 
 
-# Изменение товара
-@app.route("/api/products/<int:product_id>", methods=["PUT"])
-def update_product(product_id):
-    product = next(
-        (p for p in products if p["id"] == product_id),
-        None
-    )
-
-    if product is None:
-        return jsonify({"error": "Товар не найден"}), 404
-
-    data = request.get_json(silent=True)
-
-    if not isinstance(data, dict):
-        return jsonify({"error": "Ожидается JSON-объект"}), 400
-
-    if "name" in data:
-        if not isinstance(data["name"], str) or not data["name"].strip():
-            return jsonify({"error": "Некорректное название"}), 400
-        product["name"] = data["name"].strip()
-
-    if "price" in data:
-        price = data["price"]
-        if (
-            isinstance(price, bool)
-            or not isinstance(price, (int, float))
-            or price < 0
-        ):
-            return jsonify({"error": "Некорректная цена"}), 400
-        product["price"] = price
-
-    if "description" in data:
-        if not isinstance(data["description"], str):
-            return jsonify({"error": "Некорректное описание"}), 400
-        product["description"] = data["description"]
-
-    return jsonify(product), 200
-
-
-# Удаление товара
-@app.route("/api/products/<int:product_id>", methods=["DELETE"])
-def delete_product(product_id):
-    product = next(
-        (p for p in products if p["id"] == product_id),
-        None
-    )
-
-    if product is None:
-        return jsonify({"error": "Товар не найден"}), 404
-
-    products.remove(product)
-
-    return jsonify({
-        "message": "Товар удалён",
-        "id": product_id
-    }), 200
-
-
-# Информация о ферме
-@app.route("/api/farm", methods=["GET"])
+@app.get("/api/farm")
 def get_farm():
-    return jsonify(farm), 200
+    return jsonify(FARM), 200
 
+
+@app.get("/api/cart")
+def get_cart():
+    cart_id = get_cart_id()
+    if not cart_id:
+        return jsonify({"error": "Передайте уникальный идентификатор корзины в заголовке X-Cart-ID"}), 400
+    with get_db() as db:
+        return jsonify(get_cart_payload(db, cart_id)), 200
+
+
+@app.post("/api/cart/items")
+def add_cart_item():
+    cart_id = get_cart_id()
+    if not cart_id:
+        return jsonify({"error": "Передайте уникальный идентификатор корзины в заголовке X-Cart-ID"}), 400
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Ожидается JSON-объект"}), 400
+
+    product_id = data.get("product_id")
+    quantity = data.get("quantity", 1)
+    if isinstance(product_id, bool) or not isinstance(product_id, int) or product_id < 1:
+        return jsonify({"error": "product_id должен быть положительным целым числом"}), 400
+    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1 or quantity > 99:
+        return jsonify({"error": "quantity должен быть целым числом от 1 до 99"}), 400
+
+    with get_db() as db:
+        product = db.execute("SELECT id FROM products WHERE id = ?", (product_id,)).fetchone()
+        if product is None:
+            return jsonify({"error": "Товар не найден"}), 404
+
+        current = db.execute(
+            "SELECT quantity FROM cart_items WHERE cart_id = ? AND product_id = ?",
+            (cart_id, product_id)
+        ).fetchone()
+        new_quantity = quantity + (current["quantity"] if current else 0)
+        if new_quantity > 99:
+            return jsonify({"error": "В корзине нельзя хранить больше 99 единиц одного товара"}), 400
+
+        db.execute("""
+            INSERT INTO cart_items (cart_id, product_id, quantity)
+            VALUES (?, ?, ?)
+            ON CONFLICT(cart_id, product_id)
+            DO UPDATE SET quantity = excluded.quantity
+        """, (cart_id, product_id, new_quantity))
+        payload = get_cart_payload(db, cart_id)
+
+    return jsonify(payload), 201
+
+
+@app.patch("/api/cart/items/<int:product_id>")
+def update_cart_item(product_id):
+    cart_id = get_cart_id()
+    if not cart_id:
+        return jsonify({"error": "Передайте уникальный идентификатор корзины в заголовке X-Cart-ID"}), 400
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Ожидается JSON-объект"}), 400
+
+    quantity = data.get("quantity")
+    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1 or quantity > 99:
+        return jsonify({"error": "quantity должен быть целым числом от 1 до 99"}), 400
+
+    with get_db() as db:
+        existing = db.execute(
+            "SELECT quantity FROM cart_items WHERE cart_id = ? AND product_id = ?",
+            (cart_id, product_id)
+        ).fetchone()
+        if existing is None:
+            return jsonify({"error": "Товара нет в корзине"}), 404
+        db.execute(
+            "UPDATE cart_items SET quantity = ? WHERE cart_id = ? AND product_id = ?",
+            (quantity, cart_id, product_id)
+        )
+        payload = get_cart_payload(db, cart_id)
+
+    return jsonify(payload), 200
+
+
+@app.delete("/api/cart/items/<int:product_id>")
+def remove_cart_item(product_id):
+    cart_id = get_cart_id()
+    if not cart_id:
+        return jsonify({"error": "Передайте уникальный идентификатор корзины в заголовке X-Cart-ID"}), 400
+
+    with get_db() as db:
+        cursor = db.execute(
+            "DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?",
+            (cart_id, product_id)
+        )
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Товара нет в корзине"}), 404
+        payload = get_cart_payload(db, cart_id)
+
+    return jsonify(payload), 200
+
+
+@app.delete("/api/cart")
+def clear_cart():
+    cart_id = get_cart_id()
+    if not cart_id:
+        return jsonify({"error": "Передайте уникальный идентификатор корзины в заголовке X-Cart-ID"}), 400
+
+    with get_db() as db:
+        db.execute("DELETE FROM cart_items WHERE cart_id = ?", (cart_id,))
+        payload = get_cart_payload(db, cart_id)
+
+    return jsonify(payload), 200
+
+
+init_db()
 
 if __name__ == "__main__":
     app.run(debug=True)
-
